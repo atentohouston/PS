@@ -1,0 +1,6 @@
+$text = "Ana Luisa estan listos los bonos ya estan depositados"
+
+Add-Type -AssemblyName System.Speech
+
+$synthesizer = New-Object System.Speech.Synthesis.SpeechSynthesizer
+$synthesizer.Speak($text)
