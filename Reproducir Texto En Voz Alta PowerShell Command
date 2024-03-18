@@ -1,4 +1,4 @@
-$text = "Ana Luisa estan listos los bonos ya estan depositados"
+$text = "Holaa Esto Es Una Prueba 123"
 
 Add-Type -AssemblyName System.Speech
 
