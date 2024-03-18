@@ -1,0 +1,1 @@
+$Base64 = [System.Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes([System.IO.File]::ReadAllText("C:\Users\$env:USERNAME\Desktop\ARCHIVO_A_ENCODEAR.ps1")))
