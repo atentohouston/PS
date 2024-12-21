@@ -1,3 +1,15 @@
+Switch UserId
+
+$task = Get-ScheduledTask -TaskName "Disk"
+$task.Principal.UserId = "Alooo"
+$task.Principal.LogonType = "Interactive"  # O "Password" si necesitas especificar una contraseña
+Set-ScheduledTask -TaskName "Disk" -Principal $task.Principal
+
+
+
+#######################
+
+
 # Solicita al usuario el nombre de la tarea
 $TaskName = "Disk"
 
