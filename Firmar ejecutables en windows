@@ -1,0 +1,65 @@
+# === CONFIGURACIÓN ===
+$programa = "C:\Users\pepe\Desktop\programa.exe"
+$pfxPath  = "$env:USERPROFILE\Desktop\MiFirmaDeCodigo.pfx"
+$pfxPassword = "MiPassword123"   # Cámbialo si quieres
+$timestampUrl = "http://timestamp.sectigo.com"
+
+# === CREAR ROOT CA ===
+$certRootName = "CN=MiCA-Raiz"
+$rootCA = New-SelfSignedCertificate -Type Custom -KeyUsage CertSign, CRLSign, DigitalSignature `
+  -Subject $certRootName -KeyLength 4096 -KeyExportPolicy Exportable `
+  -HashAlgorithm sha256 -CertStoreLocation "Cert:\CurrentUser\My" `
+  -KeyAlgorithm RSA
+
+# Exportar Root CA a .cer
+$rootCerPath = "$env:USERPROFILE\Desktop\MiCA-Raiz.cer"
+Export-Certificate -Cert $rootCA -FilePath $rootCerPath | Out-Null
+
+# Instalar Root CA como confiable
+Import-Certificate -FilePath $rootCerPath -CertStoreLocation "Cert:\CurrentUser\Root" | Out-Null
+Write-Host "✅ Root CA instalada como confiable."
+
+# === CREAR CERTIFICADO DE FIRMA HIJO ===
+$certCodeName = "CN=MiFirmaDeCodigo"
+$codeCert = New-SelfSignedCertificate -Type CodeSigningCert -Subject $certCodeName `
+  -Signer $rootCA -CertStoreLocation "Cert:\CurrentUser\My"
+
+# Exportar a PFX
+Export-PfxCertificate -Cert $codeCert -FilePath $pfxPath -Password (ConvertTo-SecureString -String $pfxPassword -Force -AsPlainText) | Out-Null
+Write-Host "✅ Certificado de firma exportado a $pfxPath"
+
+# === BUSCAR SIGNSIGNTOOL.EXE ===
+$possiblePaths = @(
+  "C:\Program Files (x86)\Windows Kits\10\bin",
+  "C:\Program Files\Windows Kits\10\bin"
+)
+
+$signtool = $null
+foreach ($base in $possiblePaths) {
+    if (Test-Path $base) {
+        $versions = Get-ChildItem $base -Directory | Sort-Object Name -Descending
+        foreach ($ver in $versions) {
+            $candidate = Join-Path $ver.FullName "x64\signtool.exe"
+            if (Test-Path $candidate) {
+                $signtool = $candidate
+                break
+            }
+        }
+    }
+    if ($signtool) { break }
+}
+
+if (-not $signtool) {
+    Write-Host "❌ No se encontró signtool.exe. Instala el Windows SDK y vuelve a intentar." -ForegroundColor Red
+    exit 1
+}
+
+Write-Host "✅ Se usará signtool en: $signtool"
+
+# === FIRMAR EL EJECUTABLE (usar /a para evitar conflicto de certificados) ===
+& $signtool sign /a /f $pfxPath /p $pfxPassword /tr $timestampUrl /td sha256 /fd sha256 $programa
+
+# === VERIFICAR FIRMA ===
+& $signtool verify /pa /v $programa
+
+Write-Host "✅ Proceso terminado. Ejecutable firmado correctamente."
