@@ -1,0 +1,54 @@
+###############################################################################################################################
+# Firmar scripts PowerShell (.ps1) para evitar que sean detectados como no confiables por políticas de ejecución de PowerShell#
+###############################################################################################################################
+
+# === CONFIGURACIÓN ===
+$scriptPath = "C:\Users\pepe\Desktop\programa.ps1"    # Ruta del script .ps1
+$pfxPassword = "MiPassword123"                        # Cambiar a uno seguro
+
+# === CREAR ROOT CA ===
+$certRootName = "CN=MiCA-Raiz"
+$rootCA = New-SelfSignedCertificate -Type Custom -KeyUsage CertSign, CRLSign, DigitalSignature `
+    -Subject $certRootName -KeyLength 4096 -KeyExportPolicy Exportable `
+    -HashAlgorithm sha256 -CertStoreLocation "Cert:\CurrentUser\My" `
+    -KeyAlgorithm RSA
+
+# Exportar Root CA a .cer
+$rootCerPath = "$env:USERPROFILE\Desktop\MiCA-Raiz.cer"
+Export-Certificate -Cert $rootCA -FilePath $rootCerPath | Out-Null
+
+# Instalar Root CA como confiable
+Import-Certificate -FilePath $rootCerPath -CertStoreLocation "Cert:\CurrentUser\Root" | Out-Null
+Write-Host "✅ Root CA instalada como confiable."
+
+# === CREAR CERTIFICADO HIJO PARA FIRMA DE CÓDIGO ===
+$certCodeName = "CN=MiFirmaDeCodigo"
+$codeCert = New-SelfSignedCertificate -Type CodeSigningCert -Subject $certCodeName `
+    -Signer $rootCA -CertStoreLocation "Cert:\CurrentUser\My"
+
+# Exportar a PFX
+$pfxPath = "$env:USERPROFILE\Desktop\MiFirmaDeCodigo.pfx"
+Export-PfxCertificate -Cert $codeCert -FilePath $pfxPath -Password (ConvertTo-SecureString -String $pfxPassword -Force -AsPlainText) | Out-Null
+Write-Host "✅ Certificado de firma exportado a $pfxPath"
+
+# === AÑADIR CERTIFICADO HIJO A TRUSTED PUBLISHER ===
+$certCerPath = "$env:USERPROFILE\Desktop\MiFirmaDeCodigo.cer"
+Export-Certificate -Cert $codeCert -FilePath $certCerPath | Out-Null
+Import-Certificate -FilePath $certCerPath -CertStoreLocation "Cert:\CurrentUser\TrustedPublisher" | Out-Null
+Write-Host "✅ Certificado hijo añadido a TrustedPublisher."
+
+# === FIRMAR SCRIPT ===
+Set-AuthenticodeSignature -FilePath $scriptPath -Certificate $codeCert -TimestampServer "http://timestamp.sectigo.com"
+
+# Verificar la firma
+$sig = Get-AuthenticodeSignature -FilePath $scriptPath
+if ($sig.Status -eq "Valid") {
+    Write-Host "✅ Script firmado correctamente y la firma es válida."
+} else {
+    Write-Host "⚠️ Script firmado pero la firma NO es válida. Estado: $($sig.Status)"
+}
+
+# === OPCIONAL: CREAR UNA POLÍTICA DE EJECUCIÓN ESTRICTA (SI QUIERES IMPONER USO DE FIRMAS) ===
+# Set-ExecutionPolicy AllSigned -Scope CurrentUser
+
+Write-Host "✅ Proceso completo. Tu script está firmado y considerado confiable en tu PC."
